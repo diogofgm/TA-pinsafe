@@ -2,3 +2,4 @@ local/
 loca.meta
 addon_builder.conf
 .vscode/
+build/
