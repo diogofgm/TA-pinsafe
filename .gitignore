@@ -1,5 +1,11 @@
+# Splunk Files and Folders
 local/
-loca.meta
+local.meta
 addon_builder.conf
-.vscode/
+
+# MacOS Files
+.DS_Store
+
+# Other 
+.vscode
 build/
