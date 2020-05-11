@@ -2,9 +2,13 @@
 Release Notes
 =============
 
-v1.2.0 - November 2019
+v1.2.0 - May 2020
 ----------------------
 - Added new sourcetype to adress rsyslog inputs
+- Added sourcetype renaming
+- New sourcetype pinsafe:scheduler
+- Added extractions for src_ip, user, actions missing is some events
+- Added CIM Change compliance
 
 v1.1.0 - August 2019
 --------------------
