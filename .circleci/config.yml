@@ -129,7 +129,7 @@ workflows:
             - validate-content
           filters:
             tags:
-              only: /.*/
+              only: /^v.*/
             branches:
               only:
                 - master
