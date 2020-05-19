@@ -1,0 +1,7 @@
+"vendor_signature","signature"
+"AGENT_ERROR_NO_SECURITY_STRINGS","Submitted Credentials could not be matched"
+"AGENT_ERROR_BAD_OTC","The one-time code was missing or malformed"
+"LOG_USER_NOT_FOUND","No data for the user was found"
+"AGENT_ERROR_USER_LOCKED","The user account is locked"
+"AGENT_ERROR_USER_LOGIN_TRIES_EXCEEDED","The permitted number of failed authentication attempts"
+"PROVISION_FAILURE",""
