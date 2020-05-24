@@ -62,7 +62,7 @@ orbs:
                 source ~/.venv/bin/activate                
                 BUILD_DIR=build/source/$PACKAGE_ID
                 mkdir -p $BUILD_DIR
-                cp -r package/* $BUILD_DIR/
+                cp -r src/${CIRCLE_PROJECT_REPONAME}/* $BUILD_DIR/
                 crudini --set $BUILD_DIR/default/app.conf launcher version $VERSION_SPLUNK
                 crudini --set $BUILD_DIR/default/app.conf id version $VERSION_SPLUNK
                 crudini --set $BUILD_DIR/default/app.conf install build ${PACKAGE_BUILD}
