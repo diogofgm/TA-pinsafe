@@ -145,125 +145,389 @@ orbs:
           - store_test_results:
               path: test-results
 
-
-
-
-executors:
-  content-executor:
-    docker:
-      - image: circleci/python:3.7.7
-    working_directory: ~/repo
-
-jobs:
-  validate-content:
-    executor: content-executor
-    steps:
-      - run:
-          name: Checkout Repository
-          command: |
-            if [ "${CIRCLE_BRANCH}" == "" ]; then
-                git clone https://${GITHUB_TOKEN}@github.com/diogofgm/${CIRCLE_PROJECT_REPONAME}
-            else
-                git clone --branch ${CIRCLE_BRANCH} https://${GITHUB_TOKEN}@github.com/diogofgm/${CIRCLE_PROJECT_REPONAME}
-            fi
-      - restore_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "TA-pinsafe/src/TA-pinsafe/default/app.conf" }}
-      - run: *apt-install
-      - run:
-          name: Get Splunk AppInspect CLI
-          command: |
-            curl -Ls https://download.splunk.com/misc/appinspect/splunk-appinspect-latest.tar.gz -o appinspect-lastest.tar.gz 
-            mkdir appinspect-latest
-            tar -zxvf appinspect-lastest.tar.gz -C appinspect-latest --strip-components=1
-      - run:
-          name: Install Splunk AppInspect CLI
-          command: |
-            cd appinspect-latest
-            rm -rf venv
-            sudo pip install --upgrade pip setuptools
-            sudo pip install virtualenv
-            virtualenv --clear venv
-            source venv/bin/activate
-            pip install .
-      - run:
-          name: Run Splunk AppInspect
-          command: |
-            cd ${CIRCLE_PROJECT_REPONAME}/src
-            tar -zcvf ${CIRCLE_PROJECT_REPONAME}.tar.gz ${CIRCLE_PROJECT_REPONAME}
-            mkdir ../dist
-            cp ${CIRCLE_PROJECT_REPONAME}.tar.gz ../dist/
-            cd ../../
-            cd appinspect-latest
-            pwd
-            ls -ltr
-            source venv/bin/activate
-            splunk-appinspect inspect ../${CIRCLE_PROJECT_REPONAME}/src/${CIRCLE_PROJECT_REPONAME}.tar.gz | tee appinspect.log
-            if grep -q FAILURE "appinspect.log"; then
-              exit 1
-            fi
-      - save_cache:
-          key: deps1-{{ .Branch }}-{{ checksum "TA-pinsafe/src/TA-pinsafe/default/app.conf" }}
-          paths:
-            - "venv"
-      - persist_to_workspace:
-          root: TA-pinsafe/dist/
-          paths:
-              - TA-pinsafe.tar.gz
-  publish-github-release:
-    docker:
-      - image: cibuilds/github:0.10
-    steps:
-      - attach_workspace:
-          at: ~/TA-pinsafe/dist/TA-pinsafe.tar.gz
-      - run:
-          name: Publish release on Github
-          command: |
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ~/${CIRCLE_PROJECT_REPONAME}/dist/${CIRCLE_PROJECT_REPONAME}.tar.gz
-  publish-splunkbase-release:
-    docker:
-      - image: cibuilds/github:0.10
-    steps:
-      - attach_workspace:
-          at: ~/TA-pinsafe/dist/TA-pinsafe.tar.gz
-      - run:
-          name: Login to Splunkbase
-          command: |
-            AUTH=$(curl --location --request POST 'https://splunkbase.splunk.com/api/account:login/' --data-urlencode 'username='"$SPLUNKBASE_USER"'' --data-urlencode 'password='"$SPLUNKBASE_PASSWORD"'')
-            echo "$AUTH" > login.xml
-            if [ "$AUTH" == "Credentials Invalid" ]; then
-              exit 1
-            else
-              exit 0
-            fi
-      - run:
-          name: Publish release on Splunkbase
-          command: |
-            SPLUNKBASE_SESSION_ID=$(awk '/id/{printf $1}' login.xml | cut -d">" -f2 | cut -d"<" -f1)
-            curl --location --request POST 'https://splunkbase.splunk.com/api/v1/app/'"${SPLUNKBASE_APP_ID}"'/new_release/' --header 'Authorization: Basic ZGlvZ29mZ206cHVmcFloLWd5cWZ1Ny13dW5oeWQ=' --header 'Cookie: sessionid='"$SPLUNKBASE_SESSION_ID"'; csrftoken=sMucg13V1Ul7v7JNlQLPzjr3fFbZFpHQmNwW4wvnFfJXrVXbvKUaG6lzCGPi48tM' --form 'files[]=@~/'"${CIRCLE_PROJECT_REPONAME}"'/dist/' --form 'filename='"${CIRCLE_PROJECT_REPONAME}"'.tar.gz' --form 'cim_versions=4.9,4.7' --form 'splunk_versions=8.0' --form 'visibility=true'
-            exit 1
-
-workflows:
-  version: 2.1
-  validate-and-build:
+  splunk-release:
+    executors:
+      python37:
+        docker:
+          - image: circleci/python:3.7
+    commands:
+      tag:
+        parameters:
+          gh_user:
+            description: Git Hub username
+            type: string
+          gh_token:
+            description: Git Hub token
+            type: string
+          tag_level:
+            description: Tag level
+            type: string
+        steps:
+          - run:
+              name: TAG
+              command: |
+                git remote set-url origin https://<<parameters.gh_user>>:<<parameters.gh_token>>@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git
+                ./semtag <<parameters.tag_level>>
+      merge-to-master:
+        parameters:
+          gh_user:
+            description: Git Hub username
+            type: string
+          gh_token:
+            description: Git Hub token
+            type: string
+        steps:
+          - run:
+              name: Merge
+              command: |
+                git remote set-url origin https://<<parameters.gh_user>>:<<parameters.gh_token>>@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git
+                git config --global user.email "diogo.silva@devbusters.com"
+                git config --global user.name "diogofgm"
+                git pull origin master
+                git merge master -m "Merge from master"
+                git checkout master
+                git merge develop
+                git push
     jobs:
-      - validate-content:
-          filters:
-            tags:
-              only: /.*/
-      - publish-github-release:
-          requires:
-            - validate-content
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
-      - publish-splunkbase-release:
-          context: GitHub
-          requires:
-            - validate-content
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
+      tag:
+        parameters:
+          gh_user:
+            description: Git Hub username
+            type: string
+          gh_token:
+            description: Git Hub token
+            type: string
+          tag_level:
+            description: Tag level
+            type: string
+        executor: python37
+        steps:
+          - checkout
+          - tag:
+              tag_level: <<parameters.tag_level>>
+              gh_user: <<parameters.gh_user>>
+              gh_token: <<parameters.gh_token>>
+      merge-to-master:
+        executor: python37
+        parameters:
+          gh_user:
+            description: Git Hub username
+            type: string
+          gh_token:
+            description: Git Hub token
+            type: string
+        steps:
+          - checkout
+          - merge-to-master:
+              gh_user: <<parameters.gh_user>>
+              gh_token: <<parameters.gh_token>>
+
+              jobs:
+                publish-gh:
+                  docker:
+                    - image: circleci/python:3.7
+                  steps:
+                    - setup_remote_docker:
+                        docker_layer_caching: true
+                    - attach_workspace:
+                        at: /tmp/workspace
+                    - checkout
+                    - go/install
+                    - run:
+                        name: "Publish on GitHub"
+                        command: |
+                          PATH=$PATH:/usr/local/go/bin
+                          PACKAGE=$(ls /tmp/workspace/build/package/splunkbase/*)
+                          source /tmp/workspace/build/VERSION
+                          go get -v -u github.com/tcnksm/ghr            
+                          $HOME/go/bin/ghr -t ${GH_PAT} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${ISPRE} -delete ${VERSION} $PACKAGE
+                publish-sbase:
+                  docker:
+                    - image: circleci/python:3.7
+                  steps:
+                    - setup_remote_docker:
+                        docker_layer_caching: true
+                    - attach_workspace:
+                        at: /tmp/workspace
+                    - checkout
+                    - run:
+                        name: Install utils
+                        command: |
+                          pip install git+https://github.com/pixelb/crudini
+                    - run:
+                        name: "Publish on Splunkbase"
+                        command: |
+                          source .splunkbase
+                          source /tmp/workspace/build/VERSION
+                          PACKAGE=$(ls /tmp/workspace/build/package/splunkbase/*)
+                          PACKAGE_ID=$(crudini --get package/default/app.conf id name)
+                          [ "${ISPRE}" == "-prerelease" ] && SPLUNKBASE_VIS="false" || SPLUNKBASE_VIS="true"                
+                          curl -u ${SPLUNKBASE_USERNAME}:${SPLUNKBASE_PASSWORD}  --request POST https://splunkbase.splunk.com/api/v1/app/${SPLUNKBASE_ID}/new_release/ -F "files[]=@${PACKAGE}" -F "filename=${PACKAGE_ID}.spl" -F "splunk_versions=${SPLUNKBASE_SPLUNK_VERSION}" -F "visibility=${SPLUNKBASE_VIS}"
+              workflows:
+                build:
+                  jobs:
+                    - splunk-app-package/package:
+                        name: package
+                        filters:
+                          branches:
+                            only: /.*/
+                    - splunk-app-inspect/inspect:
+                        name: splunk-app-inspect-badge
+                        options: "--mode test"
+                        label: "badge"
+                        filters:
+                          branches:
+                            only: /.*/
+                        requires:
+                          - package
+                    - splunk-app-inspect/inspect:
+                        name: splunk-app-inspect-cloud
+                        options: "--mode precert --included-tags cloud"
+                        label: "cloud"
+                        filters:
+                          branches:
+                            only: /.*/
+                        requires:
+                          - package
+                    # - splunk-app-test/test_aio:
+                    #     name: test-splunk-8-0
+                    #     splunk_version: "8.0"
+                    #     filters:
+                    #       branches:
+                    #         only: /.*/
+                    # - splunk-app-test/test_aio:
+                    #     name: test-splunk-7-3
+                    #     splunk_version: "7.3"
+                    #     filters:
+                    #       branches:
+                    #         only: /.*/
+                    # - splunk-app-test/test_aio:
+                    #     name: test-splunk-7-2
+                    #     splunk_version: "7.2"
+                    #     filters:
+                    #       branches:
+                    #         only: /.*/
+                    - splunk-release/tag:
+                        name: tag-alpha
+                        tag_level: alpha
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        filters:
+                          branches:
+                            only: develop
+                    - approval-tag-beta:
+                        requires:
+                          - tag-alpha
+                        type: approval
+                        filters:
+                          branches:
+                            only: develop
+                    - splunk-release/tag:
+                        name: tag-beta
+                        tag_level: beta
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        requires:
+                          - approval-tag-beta
+                    - approval-merge-beta-to-master:
+                        requires:
+                          - tag-beta
+                        type: approval
+                        filters:
+                          branches:
+                            only: develop
+                    - splunk-release/merge-to-master:
+                        name: merge-beta-to-master
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        requires:
+                          - approval-merge-beta-to-master
+                        filters:
+                          branches:
+                            only: develop
+                    - splunk-release/tag:
+                        name: tag-candidate
+                        tag_level: candidate
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        filters:
+                          branches:
+                            only: master
+                    - approval-tag-final-major:
+                        type: approval
+                        requires:
+                          - tag-candidate
+                    - splunk-release/tag:
+                        name: tag-final-major
+                        tag_level: final -s major
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        requires:
+                          - approval-tag-final-major
+                    - approval-tag-final-minor:
+                        type: approval
+                        requires:
+                          - tag-candidate
+                    - splunk-release/tag:
+                        name: tag-final-minor
+                        tag_level: final -s minor
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        requires:
+                          - approval-tag-final-minor
+                    - approval-tag-final-patch:
+                        type: approval
+                        requires:
+                          - tag-candidate
+                    - splunk-release/tag:
+                        name: tag-final-patch
+                        tag_level: final -s patch
+                        gh_user: ${GH_USER}
+                        gh_token: ${GH_PAT}
+                        requires:
+                          - approval-tag-final-patch
+                publish:
+                  jobs:
+                    - splunk-app-package/package:
+                        name: package
+                        filters:
+                          branches:
+                            ignore: /.*/
+                          tags:
+                            only: /^v\d*\.\d*\.\d*.*$/
+                    - publish-gh:
+                        requires:
+                          - package
+                        filters:
+                          branches:
+                            ignore: /.*/
+                          tags:
+                            only: /^v\d*\.\d*\.\d*.*$/
+                    - publish-sbase:
+                        requires:
+                          - package
+                        filters:
+                          branches:
+                            ignore: /.*/
+                          tags:
+                            only: /^v\d*\.\d*\.\d*.*$/
+
+# executors:
+#   content-executor:
+#     docker:
+#       - image: circleci/python:3.7.7
+#     working_directory: ~/repo
+
+# jobs:
+#   validate-content:
+#     executor: content-executor
+#     steps:
+#       - run:
+#           name: Checkout Repository
+#           command: |
+#             if [ "${CIRCLE_BRANCH}" == "" ]; then
+#                 git clone https://${GITHUB_TOKEN}@github.com/diogofgm/${CIRCLE_PROJECT_REPONAME}
+#             else
+#                 git clone --branch ${CIRCLE_BRANCH} https://${GITHUB_TOKEN}@github.com/diogofgm/${CIRCLE_PROJECT_REPONAME}
+#             fi
+#       - restore_cache:
+#           key: deps1-{{ .Branch }}-{{ checksum "TA-pinsafe/src/TA-pinsafe/default/app.conf" }}
+#       - run: *apt-install
+#       - run:
+#           name: Get Splunk AppInspect CLI
+#           command: |
+#             curl -Ls https://download.splunk.com/misc/appinspect/splunk-appinspect-latest.tar.gz -o appinspect-lastest.tar.gz 
+#             mkdir appinspect-latest
+#             tar -zxvf appinspect-lastest.tar.gz -C appinspect-latest --strip-components=1
+#       - run:
+#           name: Install Splunk AppInspect CLI
+#           command: |
+#             cd appinspect-latest
+#             rm -rf venv
+#             sudo pip install --upgrade pip setuptools
+#             sudo pip install virtualenv
+#             virtualenv --clear venv
+#             source venv/bin/activate
+#             pip install .
+#       - run:
+#           name: Run Splunk AppInspect
+#           command: |
+#             cd ${CIRCLE_PROJECT_REPONAME}/src
+#             tar -zcvf ${CIRCLE_PROJECT_REPONAME}.tar.gz ${CIRCLE_PROJECT_REPONAME}
+#             mkdir ../dist
+#             cp ${CIRCLE_PROJECT_REPONAME}.tar.gz ../dist/
+#             cd ../../
+#             cd appinspect-latest
+#             pwd
+#             ls -ltr
+#             source venv/bin/activate
+#             splunk-appinspect inspect ../${CIRCLE_PROJECT_REPONAME}/src/${CIRCLE_PROJECT_REPONAME}.tar.gz | tee appinspect.log
+#             if grep -q FAILURE "appinspect.log"; then
+#               exit 1
+#             fi
+#       - save_cache:
+#           key: deps1-{{ .Branch }}-{{ checksum "TA-pinsafe/src/TA-pinsafe/default/app.conf" }}
+#           paths:
+#             - "venv"
+#       - persist_to_workspace:
+#           root: TA-pinsafe/dist/
+#           paths:
+#               - TA-pinsafe.tar.gz
+#   publish-github-release:
+#     docker:
+#       - image: cibuilds/github:0.10
+#     steps:
+#       - attach_workspace:
+#           at: ~/TA-pinsafe/dist/TA-pinsafe.tar.gz
+#       - run:
+#           name: Publish release on Github
+#           command: |
+#             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ~/${CIRCLE_PROJECT_REPONAME}/dist/${CIRCLE_PROJECT_REPONAME}.tar.gz
+#   publish-splunkbase-release:
+#     docker:
+#       - image: cibuilds/github:0.10
+#     steps:
+#       - attach_workspace:
+#           at: ~/TA-pinsafe/dist/TA-pinsafe.tar.gz
+#       - run:
+#           name: Login to Splunkbase
+#           command: |
+#             AUTH=$(curl --location --request POST 'https://splunkbase.splunk.com/api/account:login/' --data-urlencode 'username='"$SPLUNKBASE_USER"'' --data-urlencode 'password='"$SPLUNKBASE_PASSWORD"'')
+#             echo "$AUTH" > login.xml
+#             if [ "$AUTH" == "Credentials Invalid" ]; then
+#               exit 1
+#             else
+#               exit 0
+#             fi
+#       - run:
+#           name: Publish release on Splunkbase
+#           command: |
+#             SPLUNKBASE_SESSION_ID=$(awk '/id/{printf $1}' login.xml | cut -d">" -f2 | cut -d"<" -f1)
+#             curl --location --request POST 'https://splunkbase.splunk.com/api/v1/app/'"${SPLUNKBASE_APP_ID}"'/new_release/' --header 'Authorization: Basic ZGlvZ29mZ206cHVmcFloLWd5cWZ1Ny13dW5oeWQ=' --header 'Cookie: sessionid='"$SPLUNKBASE_SESSION_ID"'; csrftoken=sMucg13V1Ul7v7JNlQLPzjr3fFbZFpHQmNwW4wvnFfJXrVXbvKUaG6lzCGPi48tM' --form 'files[]=@~/'"${CIRCLE_PROJECT_REPONAME}"'/dist/' --form 'filename='"${CIRCLE_PROJECT_REPONAME}"'.tar.gz' --form 'cim_versions=4.9,4.7' --form 'splunk_versions=8.0' --form 'visibility=true'
+#             exit 1
+
+# workflows:
+#   version: 2.1
+#   validate-and-build:
+#     jobs:
+#       - validate-content:
+#           filters:
+#             tags:
+#               only: /.*/
+#       - publish-github-release:
+#           requires:
+#             - validate-content
+#           filters:
+#             tags:
+#               only: /^v.*/
+#             branches:
+#               ignore: /.*/
+#       - publish-splunkbase-release:
+#           context: GitHub
+#           requires:
+#             - validate-content
+#           filters:
+#             tags:
+#               only: /^v.*/
+#             branches:
+#               ignore: /.*/
