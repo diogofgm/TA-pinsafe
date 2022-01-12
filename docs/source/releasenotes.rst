@@ -2,6 +2,12 @@
 Release Notes
 =============
 
+v1.3.0 - May 2020
+----------------------
+- Added extra atributes in app.conf
+- Added LICENSE file
+- Added app.manifest
+
 v1.2.0 - May 2020
 ----------------------
 - Added new sourcetype to adress rsyslog inputs
