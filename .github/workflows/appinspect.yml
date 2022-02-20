@@ -1,4 +1,4 @@
-name: CI
+name: AppInspect
 on:
   push:
     branches:
@@ -12,7 +12,7 @@ on:
     branches:
       - "main"
       - "develop"
-  
+
 jobs:
 
   # Package App
@@ -25,13 +25,13 @@ jobs:
         with:
           # semantic-release won't trigger a tagged build if this is not set false
           persist-credentials: false
-      
+
       # Our add-on contains Python code, so we need to install Python in the container
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
           python-version: 3.7
-      
+
       # - name: Package Splunk App with SLIM
       #   id: slim
       #   uses: splunk/addonfactory-packaging-toolkit-action@v1.1.1
@@ -89,4 +89,3 @@ jobs:
   #   name: Release to Splunkbase
   #   needs: appinspect-cli
   #   runs-on: ubuntu-latest
-
