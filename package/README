@@ -1,12 +1,12 @@
 # Swivel PINsafe Add-on for Splunk
 
 ## System requirements
-- Swivel PINsafe 
+- Swivel PINsafe
 - Splunk 7.0 or newer
 
 ## Installation
-Install the add-on on: 
-Search Heads - The add-on contains search time extractions 
+Install the add-on on:
+Search Heads - The add-on contains search time extractions
 Indexers - Needed for index time operations in case the syslog flow is targetting this instances
 Heavy Forwaders - Needed for index time operations in case the syslog flow is targetting this instances
 
@@ -35,4 +35,3 @@ You can file bug reports on our [GitHub issue tracker](https://github.com/diogof
 
 ## Online documentation
 http://ta-pinsafe.readthedocs.org
-
