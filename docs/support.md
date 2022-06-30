@@ -5,7 +5,7 @@ nav_order: 5
 ---
 # Support
 
-# Bugs & Support Issues
+## Bugs & Support Issues
 
 
 You can file bug reports on our [GitHub issue tracker](https://github.com/diogofgm/TA-pinsafe/issues), and they will be addressed as soon as possible.
