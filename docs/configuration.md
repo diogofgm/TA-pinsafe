@@ -13,9 +13,7 @@ nav_order: 5
 
 ### Receiving syslogs on Splunk
 
-NOTE: 
-{: .label .label-yellow }
-Its recommended to use a separate and dedicated syslog solution (e.g. rsyslog, syslog-ng, etc).
+NOTE: {: .label .label-yellow } Its recommended to use a separate and dedicated syslog solution (e.g. rsyslog, syslog-ng, etc).
 - Configure new TCP port (e.g. 514) pointing to the new index using the "pinsafe" sourcetype
 
 ### Monitoring log files
