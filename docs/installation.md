@@ -1,9 +1,12 @@
-============
-Installation
-============
+---
+layout: default
+title: Installation
+nav_order: 4
+---
+# Installation
 
-Install the Swivel PINsafe Add-on for Splunk
-============================================
+## Install the Swivel PINsafe Add-on for Splunk
+
 - Get the Swivel PINsafe Add-on for Splunk by downloading it from `Splunkbase`_ or browsing to it using the app browser within Splunk Web.
 - Determine where and how to install this add-on in your deployment, using the tables on this page.
 - Perform any prerequisite steps before installing, if required and specified in the tables below.
