@@ -5,6 +5,12 @@ nav_order: 2
 ---
 # Release Notes
 
+## v1.3.2 - May 2024
+
+- version bump to comply with new Splunk AppInspect checks
+
+## v1.3.1 -
+
 ## v1.3.0 - May 2020
 
 - Added extra atributes in app.conf
